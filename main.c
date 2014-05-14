@@ -3,7 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "cfem.h"
-#include "sparse_tripplet.c"
+#include "sparse_triplet.c"
 #include "local_matrices.c"
 
 int main()
