@@ -2,9 +2,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include "cfem.h"
-#include "sparse_triplet.c"
-#include "local_matrices.c"
+#include "cfem.c"
 
 int main()
 {
@@ -28,7 +26,6 @@ int main()
                           .num_elements = num_elements,
                           .num_basis_functions = num_basis_functions,
                           .elements = elements};
-
         double weights[] = {1.0, 1.0, 1.0};
         double ref_values[] = {1.0, 1.0, 1.0};
         const cf_ref_arrays_s ref_arrays = {.num_points = num_points,
@@ -50,16 +47,14 @@ int main()
                                         .columns = columns, .values = values};
 
         printf("calling cf_build_triplet_matrix...");
-        status = cf_build_triplet_matrix(&cf_local_stiffness, &mesh, &ref_arrays, &triplets);
+        status = cf_build_mass(mesh, ref_arrays, triplets);
         printf(" done. status is %d\n", status);
         for (i = 0; i < length; i++) {
                 printf("%d %d %f\n", rows[i], columns[i], values[i]);
         }
 
-
         free(rows);
         free(columns);
         free(values);
-
         return 0;
 }
