@@ -23,6 +23,65 @@
         "[ERROR] Array index (%d) greater than length of array (%d)\n"
 
 /**
+   @brief DGEMM prototype for C.
+ */
+void dgemm_(char*, char*, const int*, const int*, const int*, const double* const,
+           const double* const,
+           const int*, const double* const, const int*, double*, double*, const int*);
+
+/**
+   @brief Constant for char 'N' by reference.
+ */
+char __c_N = 'N';
+
+/**
+   @brief Constant for char 'T' by reference.
+ */
+char __c_T = 'T';
+
+/**
+   @brief Constant for passing double precision value 1d0 by reference.
+ */
+double __d_zero = 0;
+
+/**
+   @brief Constant for passing double precision value 0d0 by reference.
+ */
+double __d_one = 1;
+
+/**
+ * @brief Wrapper around DGEMM, for C := C + A*B.T.
+ *
+ * @param m Number of rows in A.
+ * @param n Number of columns in B-transpose.
+ * @param k Number of rows in B-transpose (and columns in A).
+ * @param A First matrix.
+ * @param B Second matrix (algorithm works with its transpose).
+ * @param C Output matrix.
+ */
+#define DGEMM_WRAPPER_NT(m, n, k, A, B, C) \
+dgemm_(&(__c_T), &(__c_N), &(n), &(m), &(k), &(__d_one), B, &(k), A, \
+      &(k), &(__d_zero), C, &(n))
+
+/**
+ * @brief Wrapper around DGEMM, for A := A + B*E.T + A.
+ *
+ * @param m Number of rows in B.
+ * @param n Number of columns in E-transpose.
+ * @param k Number of rows in E-transpose (and columns in B).
+ * @param B First matrix.
+ * @param E Second matrix (algorithm works with its transpose).
+ * @param A output matrix.
+ */
+#define DGEMM_WRAPPER_NT_ADD_C(m, n, k, A, B, C) \
+dgemm_(&(__c_T), &(__c_N), &(n), &(m), &(k), &(__d_one), B, &(k), A, \
+       &(k), &(__d_one), C, &(n))
+
+#ifndef M_PI
+#define M_PI 3.141592653589799323846
+#endif
+
+/**
  * @brief A struct containing a pointer to an array as well as its length.
  * arrays for storing a sparse matrix as triplets. May contain duplicate
  * indices.
