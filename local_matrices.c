@@ -28,18 +28,12 @@ int cf_local_mass(const cf_ref_arrays_s* ref_data,
 
         int status = 0;
 
-        double jacobian = local_element->jacobian;
-
         memcpy(values, ref_data->values, sizeof(double)*length);
 
         for (i = 0; i < num_points; i++) {
-                weights_scaled[i] = ref_data->weights[i]*jacobian;
+                weights_scaled[i] = ref_data->weights[i]*local_element->jacobian;
         }
 
-        /*
-         * scale the function values by the weights and determinant. Then
-         * perform matrix multiplication.
-         */
         cf_diagonal_multiply(num_basis_functions, num_points, values,
                              weights_scaled);
 
@@ -99,6 +93,7 @@ int cf_local_convection(const cf_ref_arrays_s* ref_data,
         for (i = 0; i < num_points; i++) {
                 weights_scaled[i] = ref_data->weights[i]*local_element->jacobian;
         }
+
         if (convection_function == NULL
             || local_element->supg_stabilization_constant == 0.0) {
                 memcpy(test_function_values, ref_data->values,
@@ -119,7 +114,6 @@ int cf_local_convection(const cf_ref_arrays_s* ref_data,
                         dx[index] *= convection.value[0];
                         dx[index] += convection.value[1]*dy[index];
                 }
-
         }
         cf_diagonal_multiply(num_basis_functions, num_points, dx,
                              weights_scaled);
@@ -129,7 +123,6 @@ int cf_local_convection(const cf_ref_arrays_s* ref_data,
                          convection_matrix);
         return status;
 }
-
 
 /**
  * @brief Calculate the local stiffness matrix.
