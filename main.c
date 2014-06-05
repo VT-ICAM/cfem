@@ -47,7 +47,8 @@ int main()
                                         .columns = columns, .values = values};
 
         printf("calling cf_build_triplet_matrix...");
-        status = cf_build_mass(mesh, ref_arrays, triplets);
+        status = cf_build_mass(mesh, ref_arrays, cf_standard_cosinesine_convection,
+                               triplets);
         printf(" done. status is %d\n", status);
         for (i = 0; i < length; i++) {
                 printf("%d %d %f\n", rows[i], columns[i], values[i]);
