@@ -22,6 +22,10 @@
 #define CF_INDEX_TOO_LARGE \
         "[ERROR] Array index (%d) greater than length of array (%d)\n"
 
+/*
+ * for some builds ArgyrisPack is included before this point, so these macros
+ * and constants should not be defined again. */
+#ifndef DGEMM_WRAPPER
 /**
    @brief DGEMM prototype for C.
  */
@@ -50,7 +54,21 @@ double __d_zero = 0;
 double __d_one = 1;
 
 /**
- * @brief Wrapper around DGEMM, for C := C + A*B.T.
+ * @brief Wrapper around DGEMM, for C := A*B.
+ *
+ * @param m Number of rows in A.
+ * @param n Number of columns in B-transpose.
+ * @param k Number of rows in B-transpose (and columns in A).
+ * @param D First matrix.
+ * @param E Second matrix (algorithm works with its transpose).
+ * @param F Output matrix.
+ */
+#define DGEMM_WRAPPER(m, n, k, D, E, F) \
+dgemm_(&(__c_N), &(__c_N), &(n), &(m), &(k), &(__d_one), E, &(n), D, \
+     &(k), &(__d_zero), F, &(n))
+
+/**
+ * @brief Wrapper around DGEMM, for C := A*B.T.
  *
  * @param m Number of rows in A.
  * @param n Number of columns in B-transpose.
@@ -76,6 +94,7 @@ dgemm_(&(__c_T), &(__c_N), &(n), &(m), &(k), &(__d_one), B, &(k), A, \
 #define DGEMM_WRAPPER_NT_ADD_C(m, n, k, A, B, C) \
 dgemm_(&(__c_T), &(__c_N), &(n), &(m), &(k), &(__d_one), B, &(k), A, \
        &(k), &(__d_one), C, &(n))
+#endif
 
 #ifndef M_PI
 #define M_PI 3.141592653589799323846
