@@ -11,8 +11,8 @@
  */
 #define USE_ROW_MAJOR
 #define LAPACKINDEX int
-#include "argyris_pack.c"
 #include "argyris_pack.h"
+#include "argyris_pack.c"
 #endif
 
 #include "cfem.h"

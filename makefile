@@ -1,5 +1,4 @@
-CC = gcc
-CFLAGS = -std=c99 -Wall -pedantic -Wextra -O4
+CFLAGS = -std=c99 -Wall -pedantic -Wextra -Wno-unused-parameter -O3
 LDFLAGS=-L../../ArgyrisPack/
 
 a.out: *.c

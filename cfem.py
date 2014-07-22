@@ -81,10 +81,14 @@ for builder in [
     builder.restype = ct.c_int
     builder.argtypes = [CMesh, CRefArrays, ct.c_void_p, CTripletMatrix]
 
+for builder in [cfem.cf_ap_build_jacobian_0, cfem.cf_ap_build_jacobian_1]:
+    builder.restype = ct.c_int
+    builder.argtypes = [CMesh, CRefArrays, ct.c_void_p, CVector, CTripletMatrix]
+
 for load in [cfem.cf_ap_build_load, cfem.cf_build_load]:
     load.restype = ct.c_int
-    load.argtypes = [ct.POINTER(CMesh), ct.POINTER(CRefArrays), ct.c_void_p,
-                                   ct.c_void_p, ct.c_double, ct.POINTER(CVector)]
+    load.argtypes = [CMesh, CRefArrays, ct.c_void_p, ct.c_void_p, ct.c_double,
+                     CVector]
 
 # define caches.
 _compiled_lookup = dict()
@@ -126,6 +130,37 @@ def get_matrix(matrix, mesh, argyris=False,
     builder(cmesh, ref_data, convection, triplet_matrix)
     return sparse.coo_matrix((values, (rows, columns))).tocsc()
 
+def get_linearization(matrix, mesh, solution, argyris=False,
+                      convection_field=(sg.cos(sg.pi/3), sg.sin(sg.pi/3)),
+                      forcing_function=1, stabilization_coeff=0.0):
+    if not argyris:
+        raise NotImplementedError
+    order = 5
+    builder = {
+        0: cfem.cf_ap_build_jacobian_0,
+        1: cfem.cf_ap_build_jacobian_1,
+    }[matrix]
+    convection, _, ref_data = _get_lookups(convection_field, forcing_function,
+                                           stabilization_coeff, order,
+                                           argyris=True)
+    cmesh, elements = _get_cmesh(mesh)
+
+    length = elements.shape[0]*elements.shape[1]**2
+    rows = np.zeros(length, dtype=np.int32) + -99999
+    columns = np.zeros(length, dtype=np.int32) + -99999
+    values = np.zeros(length, dtype=np.double) + -99999
+    triplet_matrix = CTripletMatrix(length=length,
+                                    rows=rows.ctypes.data_as(PINT),
+                                    columns=columns.ctypes.data_as(PINT),
+                                    values=values.ctypes.data_as(PDOUBLE))
+
+    assert len(solution) == mesh.nodes.shape[0]
+    cvector = CVector(length=mesh.nodes.shape[0],
+                      values=solution.ctypes.data_as(PDOUBLE))
+    builder(cmesh, ref_data, convection, cvector, triplet_matrix)
+    answer = sparse.coo_matrix((values, (rows, columns))).tocsc()
+    return answer
+
 def get_load_vector(mesh, time, argyris=False,
                     convection_field=(sg.cos(sg.pi/3), sg.sin(sg.pi/3)),
                     forcing_function=1, stabilization_coeff=0.0):
@@ -150,8 +185,7 @@ def get_load_vector(mesh, time, argyris=False,
         builder = cfem.cf_ap_build_load
     else:
         builder = cfem.cf_build_load
-    builder(ct.byref(cmesh), ct.byref(ref_data), convection, forcing,
-            time, cvector)
+    builder(cmesh, ref_data, convection, forcing, time, cvector)
 
     return load_vector
 

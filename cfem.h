@@ -135,15 +135,18 @@ typedef struct {
  * @brief A struct containing information about a physical element.
  */
 typedef struct {
-        double xs[3];                       /**< The corner x-coordinates.  */
-        double ys[3];                       /**< The corner y-coordinates.  */
-        double B[4];                        /**< Affine mapping multiplier. */
-        double b[2];                        /**< Affine mapping offset.     */
+        double xs[3];                       /**< The corner x-coordinates.    */
+        double ys[3];                       /**< The corner y-coordinates.    */
+        double B[4];                        /**< Affine mapping multiplier.   */
+        double b[2];                        /**< Affine mapping offset.       */
         double jacobian;                    /**< Jacobian of transformation
-                                               y := B x + b                 */
+                                               y := B x + b                   */
         double supg_stabilization_constant; /**< Streamline-Upwind
                                                Petrov-Galerkin stabilization
-                                               constant.                     */
+                                               constant.                      */
+        const double* restrict values;      /**< If applicable, a pointer to an
+                                               array of function values for use
+                                               in computing a linearization.  */
 } cf_local_element_s;
 
 /**

@@ -23,7 +23,8 @@ cf_local_element_s cf_init_element_data(double xs[static 3],
                                             .b = {xs[0], ys[0]},
                                             .jacobian = fabs(b00*b11 - b01*b10),
                                             .supg_stabilization_constant =
-                                            supg_stabilization_constant};
+                                            supg_stabilization_constant,
+                                            .values=NULL};
         return local_element;
 }
 

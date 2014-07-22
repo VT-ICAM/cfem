@@ -229,6 +229,127 @@ int cf_ap_local_betaplane(const cf_ref_arrays_s* ref_data,
         return status;
 }
 
+int cf_ap_local_jacobian_0(const cf_ref_arrays_s* ref_data,
+                           const cf_local_element_s* local_element,
+                           cf_convection_f convection_function,
+                           double local_jacobian[static 441])
+{
+        int num_points = ref_data->num_points;
+        double C[441], B[4], b[2];
+        double dx[21*num_points], dy[21*num_points];
+        double dxx[21*num_points], dxy[21*num_points], dyy[21*num_points];
+        double weights_scaled[num_points];
+        double u_laplacian[num_points];
+        double u_dx[num_points];
+        double u_dy[num_points];
+        int i;
+        int i_one = 1;
+        int i_twentyone = 21;
+
+        cf_ap_physical_maps(local_element, C, B, b);
+        ap_physical_hessians(C, B, ref_data->dxx, ref_data->dxy, ref_data->dyy,
+                             num_points, dxx, dxy, dyy);
+        ap_physical_gradients(C, B, ref_data->dx, ref_data->dy, num_points, dx,
+                              dy);
+        /* reassign dxx to be values of the laplacian. */
+        for (i = 0; i < 21*num_points; i++) {
+                        dxx[i] += dyy[i];
+        }
+
+        /* scale the weights by the jacobian. */
+        for (i = 0; i < num_points; i++) {
+                        weights_scaled[i] = ref_data->weights[i]*local_element->jacobian;
+        }
+        cf_diagonal_multiply(21, num_points, dxx, weights_scaled);
+
+        /* calculate local laplacian and local first derivatives. */
+        DGEMM_WRAPPER_TN(i_one, num_points, i_twentyone, local_element->values,
+                         dxx, u_laplacian);
+        DGEMM_WRAPPER_TN(i_one, num_points, i_twentyone, local_element->values,
+                         dx, u_dx);
+        DGEMM_WRAPPER_TN(i_one, num_points, i_twentyone, local_element->values,
+                         dy, u_dy);
+
+        cf_diagonal_multiply(21, num_points, dx, u_dy);
+        cf_diagonal_multiply(21, num_points, dy, u_dx);
+        for (i = 0; i < num_points*21; i++) {
+                dx[i] -= dy[i];
+        }
+        DGEMM_WRAPPER_NT(i_twentyone, i_twentyone, num_points, dx, dxx,
+                         local_jacobian);
+        return 0;
+}
+
+int cf_ap_local_jacobian_1(const cf_ref_arrays_s* ref_data,
+                           const cf_local_element_s* local_element,
+                           cf_convection_f convection_function,
+                           double local_jacobian[static 441])
+{
+        int num_points = ref_data->num_points;
+        double C[441], B[4], b[2];
+        double dx[21*num_points], dy[21*num_points];
+        double dxx[21*num_points], dxy[21*num_points], dyy[21*num_points];
+        double weights_scaled[num_points];
+        double u_laplacian[num_points];
+        double u_dx[num_points];
+        double u_dy[num_points];
+        double middle[21*num_points];
+        int i, j;
+        int i_one = 1;
+        int i_twentyone = 21;
+
+        cf_ap_physical_maps(local_element, C, B, b);
+        ap_physical_hessians(C, B, ref_data->dxx, ref_data->dxy, ref_data->dyy,
+                             num_points, dxx, dxy, dyy);
+        ap_physical_gradients(C, B, ref_data->dx, ref_data->dy, num_points, dx,
+                              dy);
+
+        /* reassign dxx to be values of the laplacian. */
+        for (i = 0; i < 21*num_points; i++) {
+                        dxx[i] += dyy[i];
+        }
+
+        /* scale the weights by the jacobian. */
+        for (i = 0; i < num_points; i++) {
+                        weights_scaled[i] = ref_data->weights[i]*local_element->jacobian;
+        }
+        cf_diagonal_multiply(21, num_points, dxx, weights_scaled);
+
+        /* calculate local laplacian and local first derivatives. */
+        DGEMM_WRAPPER_TN(i_one, num_points, i_twentyone, local_element->values,
+                         dxx, u_laplacian);
+        DGEMM_WRAPPER_TN(i_one, num_points, i_twentyone, local_element->values,
+                         dx, u_dx);
+        DGEMM_WRAPPER_TN(i_one, num_points, i_twentyone, local_element->values,
+                         dy, u_dy);
+
+        memcpy(middle, dx, sizeof(dx));
+        cf_diagonal_multiply(21, num_points, middle, u_laplacian);
+
+        /*
+         * Form local_jacobian as the equivalent of
+         *
+         *     middle*dy.T - dy*middle.T
+         *
+         * by
+         * 1. local_jacobian := middle*dy.T
+         * 2. copy local_jacobian into C (no longer needed)
+         * 3. subtract off the transpose of what is stored now in C from
+         *    local_jacobian.
+         */
+        DGEMM_WRAPPER_NT(i_twentyone, i_twentyone, num_points,
+                         middle, dy, local_jacobian);
+        memcpy(C, local_jacobian, sizeof(C));
+
+        for (i = 0; i < 21; i++) {
+                for (j = 0; j < 21; j++) {
+                        local_jacobian[CF_INDEX(i, j, 21, 21)] -=
+                                C[CF_INDEX(j, i, 21, 21)];
+                }
+        }
+        return 0;
+}
+
 /**
  * @brief Calculate the local load vector.
  *
@@ -368,6 +489,48 @@ int cf_ap_build_biharmonic(const cf_mesh_s mesh, const cf_ref_arrays_s ref_data,
         return status;
 }
 
+/**
+ * @brief Build the first nonlinearization.
+ *
+ * @param[in] mesh Finite element mesh.
+ * @param[in] ref_data Information about finite element space on the reference
+ * domain.
+ * @param[in] solution Vector of the solution we are linearizing about.
+ * @param[out] matrix Sparse matrix in triplet format.
+ */
+int cf_ap_build_jacobian_0(const cf_mesh_s mesh, const cf_ref_arrays_s ref_data,
+                          cf_convection_f convection_function,
+                          cf_vector_s solution,
+                          cf_triplet_matrix_s matrix)
+{
+        int status;
+        status = cf_build_triplet_matrix_linearized(
+                cf_ap_local_jacobian_0, &mesh, &ref_data, convection_function,
+                &solution, &matrix);
+        return status;
+}
+
+/**
+ * @brief Build the second nonlinearization.
+ *
+ * @param[in] mesh Finite element mesh.
+ * @param[in] ref_data Information about finite element space on the reference
+ * domain.
+ * @param[in] solution Vector of the solution we are linearizing about.
+ * @param[out] matrix Sparse matrix in triplet format.
+ */
+int cf_ap_build_jacobian_1(const cf_mesh_s mesh, const cf_ref_arrays_s ref_data,
+                          cf_convection_f convection_function,
+                          cf_vector_s solution,
+                          cf_triplet_matrix_s matrix)
+{
+        int status;
+        status = cf_build_triplet_matrix_linearized(
+                cf_ap_local_jacobian_1, &mesh, &ref_data, convection_function,
+                &solution, &matrix);
+        return status;
+}
+
 /*
  * TODO this is really just a cut-and-paste of the Lagrange case. There should
  * be a way to have a common backend global load vector assembler for both sets
@@ -386,39 +549,39 @@ int cf_ap_build_biharmonic(const cf_mesh_s mesh, const cf_ref_arrays_s ref_data,
  * @param[in] time Time value at which to evaluate the forcing function.
  * @param[out] vector Load vector.
  */
-int cf_ap_build_load(const cf_mesh_s* mesh, const cf_ref_arrays_s* ref_data,
+int cf_ap_build_load(const cf_mesh_s mesh, const cf_ref_arrays_s ref_data,
                      cf_convection_f convection_function,
                      cf_forcing_f forcing_function, double time,
-                     cf_vector_s* vector)
+                     cf_vector_s vector)
 {
         double xs[3], ys[3];
-        double local_load_vector[ref_data->num_basis_functions];
+        double local_load_vector[ref_data.num_basis_functions];
         cf_local_element_s element_data;
         int basis_num, element_num, node_index, i;
         int status = 0;
 
-        for (element_num = 0; element_num < mesh->num_elements; element_num++) {
-                cf_check(cf_get_corners(mesh, element_num, xs, ys));
+        for (element_num = 0; element_num < mesh.num_elements; element_num++) {
+                cf_check(cf_get_corners(&mesh, element_num, xs, ys));
                 element_data = cf_init_element_data(xs, ys,
-                                                    ref_data->global_supg_constant);
+                                                    ref_data.global_supg_constant);
                 /* cf_ap_local_load can fail (stabilization is not yet supported). */
                 cf_check(cf_ap_local_load(
-                                 ref_data, &element_data, convection_function,
+                                 &ref_data, &element_data, convection_function,
                                  forcing_function, time, local_load_vector));
 
-                for (i = 0; i < mesh->num_basis_functions; i++) {
+                for (i = 0; i < mesh.num_basis_functions; i++) {
                         node_index = CF_INDEX(element_num, i,
-                                              mesh->num_elements,
-                                              mesh->num_basis_functions);
-                        basis_num = mesh->elements[node_index];
-                        if (basis_num >= vector->length) {
+                                              mesh.num_elements,
+                                              mesh.num_basis_functions);
+                        basis_num = mesh.elements[node_index];
+                        if (basis_num >= vector.length) {
                                 fprintf(stderr, CF_INDEX_TOO_LARGE, basis_num,
-                                        vector->length);
+                                        vector.length);
                                 basis_num = 0;
                                 status = 1;
                                 cf_check(1);
                         }
-                        vector->values[basis_num] += local_load_vector[i];
+                        vector.values[basis_num] += local_load_vector[i];
                 }
         }
         return status;
